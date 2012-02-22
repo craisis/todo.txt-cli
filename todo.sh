@@ -861,6 +861,7 @@ action=$( printf "%s\n" "$ACTION" | tr 'A-Z' 'a-z' )
 ## If the first argument is "command", run the rest of the arguments
 ## using todo.sh builtins.
 ## Else, run a actions script with the name of the command if it exists
+## Else, run an actions script in a directory of the name of the command with the command named the lowest number we have not yet executed
 ## or fallback to using a builtin
 if [ "$action" == command ]
 then
@@ -868,10 +869,26 @@ then
     shift
     ## Reset action to new first argument
     action=$( printf "%s\n" "$1" | tr 'A-Z' 'a-z' )
-elif [ -d "$TODO_ACTIONS_DIR" -a -x "$TODO_ACTIONS_DIR/$action" ]
+elif [ -d "$TODO_ACTIONS_DIR" -a ! -d "$TODO_ACTIONS_DIR/$action" -a -x "$TODO_ACTIONS_DIR/$action" ]
 then
     "$TODO_ACTIONS_DIR/$action" "$@"
     exit $?
+elif [ -d "$TODO_ACTIONS_DIR" -a -d "$TODO_ACTIONS_DIR/$action" ]
+then
+	# Set our action counter to zero if it doesn't exist
+	if [ -z "$TODO_ACTIONS_LAST_NUM" ]
+	then
+		export TODO_ACTIONS_LAST_NUM=0
+	fi
+	# Get the lowest action number that we haven't executed yet
+	action_number=( $( ls -1 "$TODO_ACTIONS_DIR/$action/" |sort -n | awk -v last_num=$TODO_ACTIONS_LAST_NUM '$1>last_num' | head -n1 ) )
+	if [ ! -z "$action_number" -a -x "$TODO_ACTIONS_DIR/$action/$action_number" ]
+	then
+		# Set our action counter approprately
+		export TODO_ACTIONS_LAST_NUM=$action_number
+		"$TODO_ACTIONS_DIR/$action/$action_number" "$@"
+		exit $?
+	fi
 fi
 
 ## Only run if $action isn't found in .todo.actions.d
